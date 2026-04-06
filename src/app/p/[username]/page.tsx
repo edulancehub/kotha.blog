@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getUserByUsername, getSiteSettingsByUsername, getPublishedPostsByUsername } from "@/lib/db";
 import { isValidTenantSlug, hubBaseUrl } from "@/lib/tenancy";
 import { getTheme, type ThemeConfig } from "@/lib/themes";
+import { BlogAdStrip } from "@/components/BlogAdStrip";
 
 type Props = { params: Promise<{ username: string }> };
 
@@ -20,6 +21,7 @@ export default async function TenantHomePage({ params }: Props) {
   const settings = await getSiteSettingsByUsername(username);
   const posts = await getPublishedPostsByUsername(username);
   const theme = getTheme(settings?.theme || "minimal");
+  const showAds = settings?.adsEnabled === true;
 
   return (
     <>
@@ -41,6 +43,12 @@ export default async function TenantHomePage({ params }: Props) {
             </a>
           </div>
         </nav>
+
+        {showAds && settings?.adSlotHeader ? (
+          <div className="themed-ad-wrap">
+            <BlogAdStrip html={settings.adSlotHeader} />
+          </div>
+        ) : null}
 
         {/* ── Hero Header ── */}
         <header className="themed-header">
@@ -107,6 +115,8 @@ export default async function TenantHomePage({ params }: Props) {
                       <time dateTime={post.createdAt}>{formatDate(post.createdAt)}</time>
                       <span>·</span>
                       <span>{post.readTime} min read</span>
+                      <span>·</span>
+                      <span>{(post.views ?? 0).toLocaleString()} views</span>
                       {post.claps > 0 && <><span>·</span><span>👏 {post.claps}</span></>}
                     </div>
                     {post.tags.length > 0 && (
@@ -122,6 +132,12 @@ export default async function TenantHomePage({ params }: Props) {
             </div>
           )}
         </main>
+
+        {showAds && settings?.adSlotFooter ? (
+          <div className="themed-ad-wrap">
+            <BlogAdStrip html={settings.adSlotFooter} />
+          </div>
+        ) : null}
 
         {/* ── Footer ── */}
         <footer className="themed-footer">

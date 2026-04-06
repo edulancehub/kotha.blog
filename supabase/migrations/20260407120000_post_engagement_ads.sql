@@ -19,8 +19,6 @@ end;
 $$;
 
 grant execute on function public.increment_post_views(uuid) to service_role;
-grant execute on function public.increment_post_views(uuid) to authenticated;
-grant execute on function public.increment_post_views(uuid) to anon;
 
 -- Comments (signed-in Kotha users)
 create table if not exists public.post_comments (

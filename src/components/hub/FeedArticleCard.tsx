@@ -65,6 +65,8 @@ export function FeedArticleCard({ item, index = 0 }: { item: FeedItem; index?: n
           <time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>
           <span className="text-border">·</span>
           <span>{item.readTime} min read</span>
+          <span className="text-border">·</span>
+          <span>{(item.views ?? 0).toLocaleString()} views</span>
           {item.tags.length > 0 && (
             <>
               <span className="text-border">·</span>

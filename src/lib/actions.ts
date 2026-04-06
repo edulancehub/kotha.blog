@@ -12,7 +12,13 @@ import {
   updateUser,
   clapPost,
   isUsernameAvailable,
+  addComment,
+  getPostById,
+  getUserById,
+  getUserReaction,
+  setUserReaction,
   type BlogTheme,
+  type ReactionKind,
 } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -150,6 +156,68 @@ export async function deletePostAction(formData: FormData) {
 
 export async function clapPostAction(postId: string) {
   return clapPost(postId);
+}
+
+export async function addCommentAction(
+  _prev: { error?: string; ok?: boolean } | null,
+  formData: FormData
+) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { error: "Sign in to comment on Kotha." };
+  }
+  const postId = (formData.get("postId") as string)?.trim();
+  const body = formData.get("body") as string;
+  if (!postId) return { error: "Missing post." };
+
+  const result = await addComment(postId, user.id, body || "");
+  if (result.error) return { error: result.error };
+
+  const post = await getPostById(postId);
+  const author = post ? await getUserById(post.userId) : null;
+  if (post && author) {
+    revalidatePath(`/p/${author.username}/${post.slug}`);
+    revalidatePath(`/p/${author.username}`);
+    revalidatePath("/");
+    revalidatePath("/dashboard");
+  }
+  return { ok: true as const };
+}
+
+export async function reactToPostAction(postId: string, kind: ReactionKind): Promise<{
+  error: string | null;
+  summary: Record<ReactionKind, number> | null;
+  mine: ReactionKind | null;
+}> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { error: "Sign in to react.", summary: null, mine: null };
+  }
+  const current = await getUserReaction(postId, user.id);
+  const next: ReactionKind | null = current === kind ? null : kind;
+  const { summary, mine } = await setUserReaction(postId, user.id, next);
+
+  const post = await getPostById(postId);
+  const author = post ? await getUserById(post.userId) : null;
+  if (post && author) {
+    revalidatePath(`/p/${author.username}/${post.slug}`);
+  }
+
+  return { error: null, summary, mine };
+}
+
+export async function updateAdSettingsAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/sign-in");
+
+  await updateSiteSettings(user.id, {
+    adsEnabled: formData.get("adsEnabled") === "true",
+    adSlotHeader: (formData.get("adSlotHeader") as string) || "",
+    adSlotFooter: (formData.get("adSlotFooter") as string) || "",
+    adSlotInArticle: (formData.get("adSlotInArticle") as string) || "",
+  });
+  revalidatePath("/dashboard/settings");
+  revalidatePath(`/p/${user.username}`);
 }
 
 // ── Site Settings Actions ──────────────────────────────────────

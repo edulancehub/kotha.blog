@@ -2,7 +2,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { getSiteSettings } from "@/lib/db";
-import { updateSiteSettingsAction, updateProfileAction } from "@/lib/actions";
+import {
+  updateSiteSettingsAction,
+  updateProfileAction,
+  updateAdSettingsAction,
+} from "@/lib/actions";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
@@ -137,6 +141,64 @@ export default async function SettingsPage() {
             </div>
           </div>
           <button type="submit" className="btn-primary text-sm">Save Links</button>
+        </form>
+      </section>
+
+      {/* Ads on your subdomain */}
+      <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-350">
+        <h2 className="mb-1 text-sm font-bold uppercase tracking-widest text-muted">
+          Ads on your blog
+        </h2>
+        <p className="mb-4 text-xs leading-relaxed text-muted-dark">
+          When enabled, your HTML snippets render on your public subdomain and post pages
+          (below the nav, after the article, and above the footer). Paste your ad network
+          embed code (e.g. Google AdSense). You are responsible for complying with the
+          network&apos;s policies; scripts run on your readers&apos; browsers.
+        </p>
+        <form action={updateAdSettingsAction} className="space-y-4">
+          <label className="flex cursor-pointer items-center gap-2.5 select-none">
+            <input
+              type="checkbox"
+              name="adsEnabled"
+              value="true"
+              defaultChecked={settings?.adsEnabled}
+              className="h-4 w-4 rounded border-border text-accent"
+            />
+            <span className="text-sm text-muted-dark">Show ads on my public site</span>
+          </label>
+          <div>
+            <label className="input-label">Header slot (below navigation)</label>
+            <textarea
+              name="adSlotHeader"
+              rows={4}
+              defaultValue={settings?.adSlotHeader}
+              className="input-field resize-y font-mono text-xs"
+              placeholder="<!-- e.g. AdSense unit -->"
+            />
+          </div>
+          <div>
+            <label className="input-label">In-article slot (after post body)</label>
+            <textarea
+              name="adSlotInArticle"
+              rows={4}
+              defaultValue={settings?.adSlotInArticle}
+              className="input-field resize-y font-mono text-xs"
+              placeholder="Optional mid-content placement"
+            />
+          </div>
+          <div>
+            <label className="input-label">Footer slot (above site footer)</label>
+            <textarea
+              name="adSlotFooter"
+              rows={4}
+              defaultValue={settings?.adSlotFooter}
+              className="input-field resize-y font-mono text-xs"
+              placeholder="<!-- bottom banner -->"
+            />
+          </div>
+          <button type="submit" className="btn-primary text-sm">
+            Save ad settings
+          </button>
         </form>
       </section>
 

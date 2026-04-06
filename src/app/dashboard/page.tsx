@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { getPostsByUser, getUserStats } from "@/lib/db";
+import { getPostsByUser, getUserStats, getCommentCountsForPostIds } from "@/lib/db";
 import { deletePostAction } from "@/lib/actions";
 
 function formatDate(date: string) {
@@ -11,6 +11,7 @@ export default async function DashboardPage() {
   const user = (await getCurrentUser())!;
   const posts = await getPostsByUser(user.id);
   const stats = await getUserStats(user.id);
+  const commentCounts = await getCommentCountsForPostIds(posts.map((p) => p.id));
 
   return (
     <div className="animate-fade-in">
@@ -32,16 +33,20 @@ export default async function DashboardPage() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="stat-card animate-fade-in animate-delay-100">
             <div className="stat-value">{stats.totalPosts}</div>
             <div className="stat-label">Published</div>
           </div>
           <div className="stat-card animate-fade-in animate-delay-200">
             <div className="stat-value">{stats.totalViews}</div>
-            <div className="stat-label">Views</div>
+            <div className="stat-label">Post views</div>
           </div>
           <div className="stat-card animate-fade-in animate-delay-300">
+            <div className="stat-value">{stats.totalComments}</div>
+            <div className="stat-label">Comments</div>
+          </div>
+          <div className="stat-card animate-fade-in" style={{ animationDelay: "240ms" }}>
             <div className="stat-value">{stats.totalClaps}</div>
             <div className="stat-label">Claps</div>
           </div>
@@ -89,10 +94,11 @@ export default async function DashboardPage() {
                   {post.title}
                 </Link>
                 <p className="mt-0.5 text-xs text-muted-dark line-clamp-1">{post.excerpt}</p>
-                <div className="mt-2 flex items-center gap-3 text-[11px] text-muted">
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
                   <span>{post.readTime} min read</span>
-                  {post.views > 0 && <span>·  {post.views} views</span>}
-                  {post.claps > 0 && <span>·  👏 {post.claps}</span>}
+                  <span>· {post.views ?? 0} views</span>
+                  <span>· {commentCounts[post.id] ?? 0} comments</span>
+                  {post.claps > 0 && <span>· 👏 {post.claps}</span>}
                   {post.tags.length > 0 && (
                     <span className="rounded-full bg-surface px-2 py-0.5">{post.tags[0]}</span>
                   )}

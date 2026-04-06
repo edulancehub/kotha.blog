@@ -473,18 +473,152 @@ export async function updateSiteSettings(
 // ── Stats ──────────────────────────────────────────────────────
 export async function getUserStats(
   userId: string
-): Promise<{ totalPosts: number; totalClaps: number; totalViews: number }> {
+): Promise<{
+  totalPosts: number;
+  totalClaps: number;
+  totalViews: number;
+  totalComments: number;
+}> {
   const { data } = await db()
     .from("posts")
-    .select("published, claps, views")
+    .select("id, published, claps, views")
     .eq("user_id", userId);
 
   const posts = (data || []) as Record<string, unknown>[];
+  const allIds = posts.map((p) => p.id as string);
+  const commentCounts = await getCommentCountsForPostIds(allIds);
+  const totalComments = Object.values(commentCounts).reduce((a, b) => a + b, 0);
+
   return {
     totalPosts: posts.filter((p) => Boolean(p.published)).length,
     totalClaps: posts.reduce((s, p) => s + ((p.claps as number) || 0), 0),
     totalViews: posts.reduce((s, p) => s + ((p.views as number) || 0), 0),
+    totalComments,
   };
+}
+
+export async function getCommentCountsForPostIds(
+  postIds: string[]
+): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  if (postIds.length === 0) return out;
+  for (const id of postIds) out[id] = 0;
+  const { data, error } = await db()
+    .from("post_comments")
+    .select("post_id")
+    .in("post_id", postIds);
+  if (error) return out;
+  for (const row of data || []) {
+    const pid = row.post_id as string;
+    if (pid in out) out[pid] += 1;
+  }
+  return out;
+}
+
+export async function listCommentsForPost(postId: string): Promise<PostCommentView[]> {
+  const { data: rows, error } = await db()
+    .from("post_comments")
+    .select("id, body, created_at, user_id")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+
+  if (error) return [];
+  if (!rows?.length) return [];
+
+  const userIds = [...new Set((rows as Record<string, unknown>[]).map((r) => r.user_id as string))];
+  const users = new Map<string, User>();
+  await Promise.all(
+    userIds.map(async (id) => {
+      const u = await getUserById(id);
+      if (u) users.set(id, u);
+    })
+  );
+
+  return (rows as Record<string, unknown>[]).map((r) => {
+    const u = users.get(r.user_id as string);
+    return {
+      id: r.id as string,
+      body: r.body as string,
+      createdAt: r.created_at as string,
+      author: {
+        displayName: u?.displayName ?? "Reader",
+        username: u?.username ?? "",
+        avatarUrl: u?.avatarUrl ?? "",
+      },
+    };
+  });
+}
+
+export async function addComment(
+  postId: string,
+  userId: string,
+  body: string
+): Promise<{ error?: string }> {
+  const trimmed = body.trim();
+  if (trimmed.length < 1) return { error: "Comment cannot be empty" };
+  if (trimmed.length > 4000) return { error: "Comment is too long (max 4000 characters)" };
+
+  const post = await getPostById(postId);
+  if (!post || !post.published) return { error: "Post not found" };
+
+  const { error } = await db().from("post_comments").insert({
+    post_id: postId,
+    user_id: userId,
+    body: trimmed,
+  });
+
+  if (error) return { error: error.message };
+  return {};
+}
+
+export async function getReactionSummary(
+  postId: string
+): Promise<Record<ReactionKind, number>> {
+  const base: Record<ReactionKind, number> = { like: 0, dislike: 0, love: 0 };
+  const { data, error } = await db()
+    .from("post_reactions")
+    .select("reaction")
+    .eq("post_id", postId);
+  if (error) return base;
+  for (const row of data || []) {
+    const r = row.reaction as ReactionKind;
+    if (r in base) base[r] += 1;
+  }
+  return base;
+}
+
+export async function getUserReaction(
+  postId: string,
+  userId: string
+): Promise<ReactionKind | null> {
+  const { data, error } = await db()
+    .from("post_reactions")
+    .select("reaction")
+    .eq("post_id", postId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) return null;
+  const r = data?.reaction as ReactionKind | undefined;
+  return r && ["like", "dislike", "love"].includes(r) ? r : null;
+}
+
+export async function setUserReaction(
+  postId: string,
+  userId: string,
+  next: ReactionKind | null
+): Promise<{ summary: Record<ReactionKind, number>; mine: ReactionKind | null }> {
+  const client = db();
+  await client.from("post_reactions").delete().eq("post_id", postId).eq("user_id", userId);
+  if (next !== null) {
+    await client.from("post_reactions").insert({
+      post_id: postId,
+      user_id: userId,
+      reaction: next,
+    });
+  }
+  const summary = await getReactionSummary(postId);
+  const mine = await getUserReaction(postId, userId);
+  return { summary, mine };
 }
 
 // ── Available Themes List ──────────────────────────────────────
