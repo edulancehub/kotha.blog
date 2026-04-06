@@ -31,6 +31,12 @@ export async function HubHeader() {
         </div>
 
         <nav className="ml-auto flex items-center gap-1">
+          <Link
+            href="/claim"
+            className="btn-ghost hidden py-2 text-sm text-accent sm:inline-flex"
+          >
+            Subdomain
+          </Link>
           {user ? (
             <>
               <Link href="/dashboard/new" className="btn-ghost text-sm hidden sm:inline-flex">
@@ -48,8 +54,12 @@ export async function HubHeader() {
             </>
           ) : (
             <>
-              <Link href="/sign-in" className="btn-ghost text-sm">Sign in</Link>
-              <Link href="/sign-up" className="btn-primary text-sm py-2 px-4">Get started</Link>
+              <Link href="/sign-in" className="btn-ghost text-sm">
+                Sign in
+              </Link>
+              <Link href="/sign-up" className="btn-primary px-4 py-2 text-sm">
+                Get started
+              </Link>
             </>
           )}
         </nav>

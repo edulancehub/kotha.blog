@@ -1,11 +1,16 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
 import { signOutAction } from "@/lib/actions";
+import { tenantSiteUrl } from "@/lib/tenancy";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
+
+  const host = (await headers()).get("host");
+  const publicBlogUrl = tenantSiteUrl(user.username, host);
 
   return (
     <div className="min-h-screen bg-surface/50">
@@ -23,12 +28,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            <Link
-              href={`/p/${user.username}`}
-              className="hidden sm:inline text-xs font-mono text-accent hover:underline"
+            <a
+              href={publicBlogUrl}
+              className="hidden font-mono text-xs text-accent hover:underline sm:inline"
             >
               {user.username}.kotha.blog
-            </Link>
+            </a>
             <Link href="/dashboard/new" className="btn-primary text-xs py-2 px-4">
               New Post
             </Link>
@@ -46,7 +51,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 </div>
                 <div className="py-1">
                   <Link href="/" className="dropdown-item">Hub Feed</Link>
-                  <Link href={`/p/${user.username}`} className="dropdown-item">My Blog</Link>
+                  <a href={publicBlogUrl} className="dropdown-item">
+                    My blog
+                  </a>
                 </div>
                 <div className="border-t border-border-light pt-1">
                   <form action={signOutAction}>

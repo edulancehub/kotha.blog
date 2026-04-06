@@ -1,10 +1,31 @@
 {
   "expo": {
-    "scheme": "acme",
+    "name": "Kotha",
+    "slug": "kotha",
+    "version": "1.0.0",
+    "scheme": "kotha",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0A0F1E"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "blog.kotha.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0A0F1E"
+      },
+      "package": "blog.kotha.app"
+    },
     "plugins": [
-      "expo-router"
-    ],
-    "name": "mobile",
-    "slug": "mobile"
+      "expo-router",
+      "expo-font",
+      "expo-secure-store"
+    ]
   }
 }
