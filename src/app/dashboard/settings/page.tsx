@@ -145,7 +145,7 @@ export default async function SettingsPage() {
       </section>
 
       {/* Ads on your subdomain */}
-      <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-350">
+      <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-400">
         <h2 className="mb-1 text-sm font-bold uppercase tracking-widest text-muted">
           Ads on your blog
         </h2>
@@ -203,7 +203,7 @@ export default async function SettingsPage() {
       </section>
 
       {/* Preview */}
-      <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-400">
+      <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-500">
         <h2 className="text-sm font-bold uppercase tracking-widest text-muted mb-3">Preview</h2>
         <Link href={`/p/${user.username}`} className="btn-secondary text-sm inline-flex">
           Open {user.username}.kotha.blog →

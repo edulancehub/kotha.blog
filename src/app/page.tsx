@@ -13,35 +13,37 @@ export default async function HubHomePage() {
       <div className="mx-auto flex max-w-6xl gap-10 px-4 pb-20 pt-6 sm:px-6">
         {/* ── Left Sidebar ── */}
         <aside className="hidden w-48 shrink-0 lg:block">
-          <nav className="sticky top-[4.5rem] space-y-0.5 text-sm">
-            {[
-              { label: "Feed", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6", active: true },
-              { label: "Trending", icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" },
-              { label: "Latest", icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" },
-            ].map(({ label, icon, active }) => (
-              <button
-                key={label}
-                type="button"
-                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
-                  active ? "bg-accent-subtle text-accent font-medium" : "text-muted-dark hover:bg-surface hover:text-foreground"
-                }`}
-              >
-                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={icon} />
-                </svg>
-                {label}
-              </button>
-            ))}
-          </nav>
+          <div className="sticky top-[4.5rem]">
+            <nav className="space-y-0.5 text-sm">
+              {[
+                { label: "Feed", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6", active: true },
+                { label: "Trending", icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" },
+                { label: "Latest", icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" },
+              ].map(({ label, icon, active }) => (
+                <button
+                  key={label}
+                  type="button"
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
+                    active ? "bg-accent-subtle text-accent font-medium" : "text-muted-dark hover:bg-surface hover:text-foreground"
+                  }`}
+                >
+                  <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={icon} />
+                  </svg>
+                  {label}
+                </button>
+              ))}
+            </nav>
 
-          <div className="mt-8 rounded-xl bg-gradient-to-br from-accent-subtle to-emerald-50 border border-teal-100 p-4">
-            <p className="text-xs font-bold text-accent-hover uppercase tracking-wider">Start Writing</p>
-            <p className="mt-1.5 text-xs leading-relaxed text-muted-dark">
-              Claim your domain and publish beautiful stories.
-            </p>
-            <Link href="/sign-up" className="mt-3 inline-block text-xs font-semibold text-accent hover:underline">
-              Create your blog →
-            </Link>
+            <div className="mt-8 rounded-xl bg-gradient-to-br from-accent-subtle to-emerald-50 border border-teal-100 p-4">
+              <p className="text-xs font-bold text-accent-hover uppercase tracking-wider">Start Writing</p>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-dark">
+                Claim your domain and publish beautiful stories.
+              </p>
+              <Link href="/sign-up" className="mt-3 inline-block text-xs font-semibold text-accent hover:underline">
+                Create your blog →
+              </Link>
+            </div>
           </div>
         </aside>
 
