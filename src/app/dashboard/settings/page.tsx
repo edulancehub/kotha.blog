@@ -7,7 +7,7 @@ import { updateSiteSettingsAction, updateProfileAction } from "@/lib/actions";
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
-  const settings = getSiteSettings(user.id);
+  const settings = await getSiteSettings(user.id);
 
   return (
     <div className="animate-fade-in space-y-6 max-w-2xl">

@@ -1,13 +1,20 @@
-import { cookies } from "next/headers";
-import { getSession, getUserById, type User } from "./db";
-
-const SESSION_COOKIE = "kotha_session";
+import { createClient } from "@/lib/supabase/server";
+import { getUserById, type User } from "./db";
 
 export async function getCurrentUser(): Promise<User | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-  const session = getSession(token);
-  if (!session) return null;
-  return getUserById(session.userId);
+  const supabase = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+
+  if (!authUser) return null;
+  return getUserById(authUser.id);
+}
+
+export async function getAuthUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
 }

@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const result = isUsernameAvailable(raw);
+  const result = await isUsernameAvailable(raw);
   if (!result.available) {
     const invalid =
       result.reason?.includes("reserved") ||

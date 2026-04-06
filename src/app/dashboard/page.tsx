@@ -9,8 +9,8 @@ function formatDate(date: string) {
 
 export default async function DashboardPage() {
   const user = (await getCurrentUser())!;
-  const posts = getPostsByUser(user.id);
-  const stats = getUserStats(user.id);
+  const posts = await getPostsByUser(user.id);
+  const stats = await getUserStats(user.id);
 
   return (
     <div className="animate-fade-in">

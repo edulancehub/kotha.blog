@@ -12,7 +12,7 @@ export default async function EditPostPage({ params }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
 
-  const post = getPostById(id);
+  const post = await getPostById(id);
   if (!post || post.userId !== user.id) notFound();
 
   return (

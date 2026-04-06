@@ -15,15 +15,15 @@ export default async function BlogPostPage({ params }: Props) {
   const { username, slug } = await params;
   if (!isValidTenantSlug(username)) notFound();
 
-  const post = getPostBySlug(username, slug);
+  const post = await getPostBySlug(username, slug);
   if (!post) notFound();
   const safePostHtml = sanitizePostHtml(post.content);
 
   // Count view
-  incrementViews(post.id);
+  await incrementViews(post.id);
 
-  const user = getUserByUsername(username);
-  const settings = getSiteSettingsByUsername(username);
+  const user = await getUserByUsername(username);
+  const settings = await getSiteSettingsByUsername(username);
 
   const font = settings?.fontFamily === "mono" ? "font-mono" : settings?.fontFamily === "sans" ? "font-sans" : "font-serif";
   const accent = settings?.accentColor || "#0d9488";

@@ -1,6 +1,4 @@
-import fs from "fs";
-import path from "path";
-import crypto from "crypto";
+import { createAdminClient } from "@/lib/supabase/server";
 
 // ── Types ──────────────────────────────────────────────────────
 export type User = {
@@ -8,7 +6,6 @@ export type User = {
   username: string;
   displayName: string;
   email: string;
-  passwordHash: string;
   bio: string;
   avatarUrl: string;
   joinedAt: string;
@@ -29,15 +26,18 @@ export type Post = {
   published: boolean;
   claps: number;
   views: number;
-  readTime: number; // minutes
+  readTime: number;
   createdAt: string;
   updatedAt: string;
 };
+
+export type BlogTheme = "minimal" | "dark-noir" | "vintage-press" | "neon-vapor" | "forest" | "ocean-breeze";
 
 export type SiteSettings = {
   userId: string;
   siteName: string;
   tagline: string;
+  theme: BlogTheme;
   accentColor: string;
   bgColor: string;
   textColor: string;
@@ -45,81 +45,83 @@ export type SiteSettings = {
   headerStyle: "minimal" | "bold" | "centered";
   showBio: boolean;
   socialLinks: { twitter?: string; github?: string; website?: string };
+  customCss: string;
+  logoUrl: string;
+  /** Owner enables third-party ad snippets on their public blog */
+  adsEnabled: boolean;
+  adSlotHeader: string;
+  adSlotFooter: string;
+  adSlotInArticle: string;
 };
 
-type Database = {
-  users: User[];
-  posts: Post[];
-  siteSettings: SiteSettings[];
-  sessions: { token: string; userId: string; expiresAt: string }[];
+export type ReactionKind = "like" | "dislike" | "love";
+
+export type PostCommentView = {
+  id: string;
+  body: string;
+  createdAt: string;
+  author: { displayName: string; username: string; avatarUrl: string };
 };
 
-// ── Reserved usernames that cannot be claimed ──────────────────
-const RESERVED_SLUGS = new Set([
-  "www", "app", "api", "admin", "dashboard", "mail", "ftp", "cdn",
-  "static", "assets", "claim", "help", "support", "status", "blog",
-  "docs", "staging", "dev", "test", "_next", "sign-in", "sign-up",
-  "signin", "signup", "login", "logout", "register", "settings",
-  "explore", "trending", "feed", "search", "new", "edit", "delete",
-  "account", "profile", "notifications", "messages", "billing",
-  "kotha", "about", "contact", "privacy", "terms", "legal",
-]);
-
-// ── File Path with atomic writes ───────────────────────────────
-const DB_PATH = path.join(process.cwd(), "data", "db.json");
-
-function ensureDir() {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+// ── Helper: snake_case DB row → camelCase ──────────────────────
+function mapProfile(row: Record<string, unknown>): User {
+  return {
+    id: row.id as string,
+    username: row.username as string,
+    displayName: (row.display_name as string) || "",
+    email: (row.email as string) || "",
+    bio: (row.bio as string) || "",
+    avatarUrl: (row.avatar_url as string) || "",
+    joinedAt: (row.joined_at as string) || new Date().toISOString(),
+    followers: (row.followers as number) || 0,
+    following: (row.following as number) || 0,
+  };
 }
 
-function readDb(): Database {
-  ensureDir();
-  if (!fs.existsSync(DB_PATH)) {
-    const empty: Database = { users: [], posts: [], siteSettings: [], sessions: [] };
-    fs.writeFileSync(DB_PATH, JSON.stringify(empty, null, 2));
-    return empty;
-  }
-  return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+function mapPost(row: Record<string, unknown>): Post {
+  return {
+    id: row.id as string,
+    userId: row.user_id as string,
+    slug: row.slug as string,
+    title: (row.title as string) || "",
+    subtitle: (row.subtitle as string) || "",
+    excerpt: (row.excerpt as string) || "",
+    content: (row.content as string) || "",
+    coverImage: (row.cover_image as string) || "",
+    tags: (row.tags as string[]) || [],
+    published: (row.published as boolean) || false,
+    claps: (row.claps as number) || 0,
+    views: (row.views as number) || 0,
+    readTime: (row.read_time as number) || 1,
+    createdAt: (row.created_at as string) || new Date().toISOString(),
+    updatedAt: (row.updated_at as string) || new Date().toISOString(),
+  };
 }
 
-/** Atomic write: write to temp file first, then rename */
-function writeDb(db: Database) {
-  ensureDir();
-  const tmpPath = DB_PATH + `.${Date.now()}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(db, null, 2));
-  fs.renameSync(tmpPath, DB_PATH);
-}
-
-function genId(): string {
-  return crypto.randomUUID();
-}
-
-function hashPassword(password: string): string {
-  const salt = crypto.randomBytes(16);
-  const derived = crypto.scryptSync(password, salt, 64);
-  return `scrypt$${salt.toString("hex")}$${derived.toString("hex")}`;
-}
-
-function verifyPassword(password: string, storedHash: string): boolean {
-  if (storedHash.startsWith("scrypt$")) {
-    const [, saltHex, hashHex] = storedHash.split("$");
-    if (!saltHex || !hashHex) return false;
-
-    const salt = Buffer.from(saltHex, "hex");
-    const expected = Buffer.from(hashHex, "hex");
-    const derived = crypto.scryptSync(password, salt, expected.length);
-    return crypto.timingSafeEqual(derived, expected);
-  }
-
-  // Backward compatibility for old demo hashes; auto-upgrade happens on login.
-  const legacy = crypto.createHash("sha256").update("kotha_v1_" + password).digest("hex");
-  return crypto.timingSafeEqual(Buffer.from(legacy), Buffer.from(storedHash));
-}
-
-function hashSessionToken(token: string): string {
-  const secret = process.env.SESSION_SECRET ?? "kotha_dev_session_secret_change_me";
-  return crypto.createHmac("sha256", secret).update(token).digest("hex");
+function mapSettings(row: Record<string, unknown>): SiteSettings {
+  return {
+    userId: row.user_id as string,
+    siteName: (row.site_name as string) || "",
+    tagline: (row.tagline as string) || "",
+    theme: (row.theme as BlogTheme) || "minimal",
+    accentColor: (row.accent_color as string) || "#0d9488",
+    bgColor: (row.bg_color as string) || "#fafaf9",
+    textColor: (row.text_color as string) || "#1c1917",
+    fontFamily: (row.font_family as "serif" | "sans" | "mono") || "serif",
+    headerStyle: (row.header_style as "minimal" | "bold" | "centered") || "centered",
+    showBio: row.show_bio !== false,
+    socialLinks: {
+      twitter: (row.social_twitter as string) || undefined,
+      github: (row.social_github as string) || undefined,
+      website: (row.social_website as string) || undefined,
+    },
+    customCss: (row.custom_css as string) || "",
+    logoUrl: (row.logo_url as string) || "",
+    adsEnabled: row.ads_enabled === true,
+    adSlotHeader: (row.ad_slot_header as string) || "",
+    adSlotFooter: (row.ad_slot_footer as string) || "",
+    adSlotInArticle: (row.ad_slot_in_article as string) || "",
+  };
 }
 
 function slugify(text: string): string {
@@ -132,12 +134,28 @@ function estimateReadTime(html: string): number {
   return Math.max(1, Math.round(words / 200));
 }
 
-// ── Subdomain Validation ───────────────────────────────────────
-export function isReservedUsername(slug: string): boolean {
-  return RESERVED_SLUGS.has(slug.toLowerCase());
+function genSlugSuffix(): string {
+  return Math.random().toString(36).slice(2, 10);
 }
 
-export function isUsernameAvailable(username: string): { available: boolean; reason?: string } {
+// ── Admin client (bypasses RLS) ────────────────────────────────
+function db() {
+  return createAdminClient();
+}
+
+// ── Username Validation ────────────────────────────────────────
+export async function isReservedUsername(slug: string): Promise<boolean> {
+  const { data } = await db()
+    .from("reserved_usernames")
+    .select("username")
+    .eq("username", slug.toLowerCase())
+    .maybeSingle();
+  return !!data;
+}
+
+export async function isUsernameAvailable(
+  username: string
+): Promise<{ available: boolean; reason?: string }> {
   const slug = username.toLowerCase().trim();
 
   if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug)) {
@@ -146,263 +164,335 @@ export function isUsernameAvailable(username: string): { available: boolean; rea
   if (slug.length < 2) {
     return { available: false, reason: "Username must be at least 2 characters" };
   }
-  if (isReservedUsername(slug)) {
+  if (await isReservedUsername(slug)) {
     return { available: false, reason: "This username is reserved" };
   }
-  const db = readDb();
-  if (db.users.find((u) => u.username === slug)) {
+  const { data } = await db()
+    .from("profiles")
+    .select("id")
+    .eq("username", slug)
+    .maybeSingle();
+  if (data) {
     return { available: false, reason: "This username is already taken" };
   }
   return { available: true };
 }
 
 // ── Users ──────────────────────────────────────────────────────
-export function createUser(username: string, email: string, password: string, displayName: string): { user?: User; error?: string } {
+export async function createProfile(
+  userId: string,
+  username: string,
+  email: string,
+  displayName: string
+): Promise<{ user?: User; error?: string }> {
   const slug = username.toLowerCase().trim();
-  const check = isUsernameAvailable(slug);
+  const check = await isUsernameAvailable(slug);
   if (!check.available) return { error: check.reason };
 
-  const db = readDb();
-  const normalizedEmail = email.toLowerCase().trim();
-  if (db.users.find((u) => u.email === normalizedEmail)) {
-    return { error: "Email is already registered" };
-  }
+  const { data, error } = await db()
+    .from("profiles")
+    .insert({
+      id: userId,
+      username: slug,
+      display_name: displayName,
+      email: email.toLowerCase(),
+    })
+    .select()
+    .single();
 
-  const user: User = {
-    id: genId(),
-    username: slug,
-    displayName: displayName.trim().slice(0, 80),
-    email: normalizedEmail,
-    passwordHash: hashPassword(password),
-    bio: "",
-    avatarUrl: "",
-    joinedAt: new Date().toISOString(),
-    followers: 0,
-    following: 0,
-  };
-  db.users.push(user);
+  if (error) return { error: error.message };
 
-  const settings: SiteSettings = {
-    userId: user.id,
-    siteName: displayName + "'s Blog",
+  // Create default site settings
+  await db().from("site_settings").insert({
+    user_id: userId,
+    site_name: displayName + "'s Blog",
     tagline: "Welcome to my corner of the web",
-    accentColor: "#0d9488",
-    bgColor: "#fafaf9",
-    textColor: "#1c1917",
-    fontFamily: "serif",
-    headerStyle: "centered",
-    showBio: true,
-    socialLinks: {},
-  };
-  db.siteSettings.push(settings);
-  writeDb(db);
-  return { user };
+    theme: "minimal",
+  });
+
+  return { user: mapProfile(data) };
 }
 
-export function authenticateUser(email: string, password: string): User | null {
-  const db = readDb();
-  const normalizedEmail = email.toLowerCase().trim();
-  const user = db.users.find((u) => u.email === normalizedEmail);
-  if (!user) return null;
-
-  const ok = verifyPassword(password, user.passwordHash);
-  if (!ok) return null;
-
-  if (!user.passwordHash.startsWith("scrypt$")) {
-    user.passwordHash = hashPassword(password);
-    writeDb(db);
-  }
-
-  return user;
+export async function getUserById(id: string): Promise<User | null> {
+  const { data } = await db()
+    .from("profiles")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  return data ? mapProfile(data) : null;
 }
 
-export function getUserById(id: string): User | null {
-  return readDb().users.find((u) => u.id === id) ?? null;
+export async function getUserByUsername(username: string): Promise<User | null> {
+  const { data } = await db()
+    .from("profiles")
+    .select("*")
+    .eq("username", username.toLowerCase())
+    .maybeSingle();
+  return data ? mapProfile(data) : null;
 }
 
-export function getUserByUsername(username: string): User | null {
-  return readDb().users.find((u) => u.username === username.toLowerCase()) ?? null;
-}
+export async function updateUser(
+  id: string,
+  data: Partial<Pick<User, "displayName" | "bio" | "avatarUrl">>
+): Promise<User | null> {
+  const update: Record<string, unknown> = {};
+  if (data.displayName !== undefined) update.display_name = data.displayName;
+  if (data.bio !== undefined) update.bio = data.bio;
+  if (data.avatarUrl !== undefined) update.avatar_url = data.avatarUrl;
 
-export function updateUser(id: string, data: Partial<Pick<User, "displayName" | "bio" | "avatarUrl">>): User | null {
-  const db = readDb();
-  const idx = db.users.findIndex((u) => u.id === id);
-  if (idx === -1) return null;
-  db.users[idx] = { ...db.users[idx], ...data };
-  writeDb(db);
-  return db.users[idx];
-}
+  const { data: row, error } = await db()
+    .from("profiles")
+    .update(update)
+    .eq("id", id)
+    .select()
+    .single();
 
-// ── Sessions ───────────────────────────────────────────────────
-export function createSession(userId: string): string {
-  const db = readDb();
-  // Clean expired sessions while we're here
-  const now = new Date();
-  db.sessions = db.sessions.filter((s) => new Date(s.expiresAt) > now);
-
-  const token = crypto.randomBytes(32).toString("hex");
-  const tokenHash = hashSessionToken(token);
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  db.sessions.push({ token: tokenHash, userId, expiresAt });
-  writeDb(db);
-  return token;
-}
-
-export function getSession(token: string): { userId: string } | null {
-  const tokenHash = hashSessionToken(token);
-  const session = readDb().sessions.find(
-    (s) => (s.token === tokenHash || s.token === token) && new Date(s.expiresAt) > new Date(),
-  );
-  return session ? { userId: session.userId } : null;
-}
-
-export function deleteSession(token: string) {
-  const db = readDb();
-  const tokenHash = hashSessionToken(token);
-  db.sessions = db.sessions.filter((s) => s.token !== tokenHash && s.token !== token);
-  writeDb(db);
+  return row && !error ? mapProfile(row) : null;
 }
 
 // ── Posts ───────────────────────────────────────────────────────
-export function createPost(
-  userId: string, title: string, content: string,
-  excerpt: string, coverImage: string, tags: string[],
-  published: boolean, subtitle = ""
-): Post {
-  const db = readDb();
-  const post: Post = {
-    id: genId(),
-    userId,
-    slug: slugify(title) + "-" + genId().slice(0, 8),
-    title,
-    subtitle,
-    excerpt: excerpt || title.slice(0, 160),
-    content,
-    coverImage,
-    tags,
-    published,
-    claps: 0,
-    views: 0,
-    readTime: estimateReadTime(content),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  db.posts.push(post);
-  writeDb(db);
-  return post;
+export async function createPost(
+  userId: string,
+  title: string,
+  content: string,
+  excerpt: string,
+  coverImage: string,
+  tags: string[],
+  published: boolean,
+  subtitle = ""
+): Promise<Post> {
+  const { data } = await db()
+    .from("posts")
+    .insert({
+      user_id: userId,
+      slug: slugify(title) + "-" + genSlugSuffix(),
+      title,
+      subtitle,
+      excerpt: excerpt || title.slice(0, 160),
+      content,
+      cover_image: coverImage,
+      tags,
+      published,
+      read_time: estimateReadTime(content),
+    })
+    .select()
+    .single();
+
+  return mapPost(data!);
 }
 
-export function updatePost(
-  id: string, userId: string,
+export async function updatePost(
+  id: string,
+  userId: string,
   data: Partial<Pick<Post, "title" | "content" | "excerpt" | "coverImage" | "published" | "tags" | "subtitle">>
-): Post | null {
-  const db = readDb();
-  const idx = db.posts.findIndex((p) => p.id === id && p.userId === userId);
-  if (idx === -1) return null;
-  const updated = {
-    ...db.posts[idx],
-    ...data,
-    readTime: data.content ? estimateReadTime(data.content) : db.posts[idx].readTime,
-    updatedAt: new Date().toISOString(),
-  };
-  db.posts[idx] = updated;
-  writeDb(db);
-  return updated;
-}
-
-export function deletePost(id: string, userId: string): boolean {
-  const db = readDb();
-  const len = db.posts.length;
-  db.posts = db.posts.filter((p) => !(p.id === id && p.userId === userId));
-  if (db.posts.length === len) return false;
-  writeDb(db);
-  return true;
-}
-
-export function getPostById(id: string): Post | null {
-  return readDb().posts.find((p) => p.id === id) ?? null;
-}
-
-export function getPostBySlug(username: string, slug: string): (Post & { author: User }) | null {
-  const db = readDb();
-  const user = db.users.find((u) => u.username === username.toLowerCase());
-  if (!user) return null;
-  const post = db.posts.find((p) => p.userId === user.id && p.slug === slug && p.published);
-  if (!post) return null;
-  return { ...post, author: user };
-}
-
-export function incrementViews(postId: string): void {
-  const db = readDb();
-  const idx = db.posts.findIndex((p) => p.id === postId);
-  if (idx !== -1) {
-    db.posts[idx].views += 1;
-    writeDb(db);
+): Promise<Post | null> {
+  const update: Record<string, unknown> = {};
+  if (data.title !== undefined) update.title = data.title;
+  if (data.content !== undefined) {
+    update.content = data.content;
+    update.read_time = estimateReadTime(data.content);
   }
+  if (data.excerpt !== undefined) update.excerpt = data.excerpt;
+  if (data.coverImage !== undefined) update.cover_image = data.coverImage;
+  if (data.published !== undefined) update.published = data.published;
+  if (data.tags !== undefined) update.tags = data.tags;
+  if (data.subtitle !== undefined) update.subtitle = data.subtitle;
+
+  const { data: row } = await db()
+    .from("posts")
+    .update(update)
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select()
+    .single();
+
+  return row ? mapPost(row) : null;
 }
 
-export function getPostsByUser(userId: string, publishedOnly = false): Post[] {
-  return readDb().posts
-    .filter((p) => p.userId === userId && (!publishedOnly || p.published))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+export async function deletePost(id: string, userId: string): Promise<boolean> {
+  const { error } = await db()
+    .from("posts")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId);
+  return !error;
 }
 
-export function getPublishedPostsByUsername(username: string): (Post & { author: User })[] {
-  const db = readDb();
-  const user = db.users.find((u) => u.username === username.toLowerCase());
+export async function getPostById(id: string): Promise<Post | null> {
+  const { data } = await db()
+    .from("posts")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  return data ? mapPost(data) : null;
+}
+
+export async function getPostBySlug(
+  username: string,
+  slug: string
+): Promise<(Post & { author: User }) | null> {
+  const user = await getUserByUsername(username);
+  if (!user) return null;
+  const { data } = await db()
+    .from("posts")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("slug", slug)
+    .eq("published", true)
+    .maybeSingle();
+  if (!data) return null;
+  return { ...mapPost(data), author: user };
+}
+
+/** Increments views once per page load; works for traffic from kotha.blog, subdomains, or external referrers. */
+export async function incrementViews(postId: string): Promise<number> {
+  const client = db();
+  const { data: rpcVal, error: rpcErr } = await client.rpc("increment_post_views", {
+    p_post_id: postId,
+  });
+  if (!rpcErr && typeof rpcVal === "number") {
+    return rpcVal;
+  }
+  const { data: row } = await client.from("posts").select("views").eq("id", postId).maybeSingle();
+  const next = ((row?.views as number) ?? 0) + 1;
+  await client.from("posts").update({ views: next }).eq("id", postId);
+  return next;
+}
+
+export async function getPostsByUser(userId: string, publishedOnly = false): Promise<Post[]> {
+  let query = db()
+    .from("posts")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (publishedOnly) query = query.eq("published", true);
+  const { data } = await query;
+  return (data || []).map(mapPost);
+}
+
+export async function getPublishedPostsByUsername(
+  username: string
+): Promise<(Post & { author: User })[]> {
+  const user = await getUserByUsername(username);
   if (!user) return [];
-  return db.posts
-    .filter((p) => p.userId === user.id && p.published)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .map((p) => ({ ...p, author: user }));
+  const { data } = await db()
+    .from("posts")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("published", true)
+    .order("created_at", { ascending: false });
+  return ((data || []) as Record<string, unknown>[]).map((row) => ({ ...mapPost(row), author: user }));
 }
 
-export function getFeedPosts(limit = 20): (Post & { author: User })[] {
-  const db = readDb();
-  return db.posts
-    .filter((p) => p.published)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, limit)
-    .map((p) => ({ ...p, author: db.users.find((u) => u.id === p.userId)! }))
-    .filter((p) => p.author);
+export async function getFeedPosts(limit = 20): Promise<(Post & { author: User })[]> {
+  const { data: posts } = await db()
+    .from("posts")
+    .select("*, profiles!posts_user_id_fkey(*)")
+    .eq("published", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (!posts) return [];
+
+  return (posts as Record<string, unknown>[])
+    .map((row) => {
+      const profile = (row as Record<string, unknown>).profiles as Record<string, unknown> | null;
+      if (!profile) return null;
+      return { ...mapPost(row), author: mapProfile(profile) };
+    })
+    .filter(Boolean) as (Post & { author: User })[];
 }
 
-export function clapPost(id: string): number {
-  const db = readDb();
-  const idx = db.posts.findIndex((p) => p.id === id);
-  if (idx === -1) return 0;
-  db.posts[idx].claps += 1;
-  writeDb(db);
-  return db.posts[idx].claps;
+export async function clapPost(id: string): Promise<number> {
+  const { data } = await db()
+    .from("posts")
+    .select("claps")
+    .eq("id", id)
+    .single();
+
+  const newClaps = ((data?.claps as number) || 0) + 1;
+  await db().from("posts").update({ claps: newClaps }).eq("id", id);
+  return newClaps;
 }
 
 // ── Site Settings ──────────────────────────────────────────────
-export function getSiteSettings(userId: string): SiteSettings | null {
-  return readDb().siteSettings.find((s) => s.userId === userId) ?? null;
+export async function getSiteSettings(userId: string): Promise<SiteSettings | null> {
+  const { data } = await db()
+    .from("site_settings")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data ? mapSettings(data) : null;
 }
 
-export function getSiteSettingsByUsername(username: string): SiteSettings | null {
-  const db = readDb();
-  const user = db.users.find((u) => u.username === username.toLowerCase());
+export async function getSiteSettingsByUsername(
+  username: string
+): Promise<SiteSettings | null> {
+  const user = await getUserByUsername(username);
   if (!user) return null;
-  return db.siteSettings.find((s) => s.userId === user.id) ?? null;
+  return getSiteSettings(user.id);
 }
 
-export function updateSiteSettings(userId: string, data: Partial<Omit<SiteSettings, "userId">>): SiteSettings | null {
-  const db = readDb();
-  const idx = db.siteSettings.findIndex((s) => s.userId === userId);
-  if (idx === -1) return null;
-  db.siteSettings[idx] = { ...db.siteSettings[idx], ...data };
-  writeDb(db);
-  return db.siteSettings[idx];
+export async function updateSiteSettings(
+  userId: string,
+  data: Partial<Omit<SiteSettings, "userId">>
+): Promise<SiteSettings | null> {
+  const update: Record<string, unknown> = {};
+  if (data.siteName !== undefined) update.site_name = data.siteName;
+  if (data.tagline !== undefined) update.tagline = data.tagline;
+  if (data.theme !== undefined) update.theme = data.theme;
+  if (data.accentColor !== undefined) update.accent_color = data.accentColor;
+  if (data.bgColor !== undefined) update.bg_color = data.bgColor;
+  if (data.textColor !== undefined) update.text_color = data.textColor;
+  if (data.fontFamily !== undefined) update.font_family = data.fontFamily;
+  if (data.headerStyle !== undefined) update.header_style = data.headerStyle;
+  if (data.showBio !== undefined) update.show_bio = data.showBio;
+  if (data.customCss !== undefined) update.custom_css = data.customCss;
+  if (data.logoUrl !== undefined) update.logo_url = data.logoUrl;
+  if (data.adsEnabled !== undefined) update.ads_enabled = data.adsEnabled;
+  if (data.adSlotHeader !== undefined) update.ad_slot_header = data.adSlotHeader;
+  if (data.adSlotFooter !== undefined) update.ad_slot_footer = data.adSlotFooter;
+  if (data.adSlotInArticle !== undefined) update.ad_slot_in_article = data.adSlotInArticle;
+  if (data.socialLinks) {
+    update.social_twitter = data.socialLinks.twitter || "";
+    update.social_github = data.socialLinks.github || "";
+    update.social_website = data.socialLinks.website || "";
+  }
+
+  const { data: row } = await db()
+    .from("site_settings")
+    .update(update)
+    .eq("user_id", userId)
+    .select()
+    .single();
+
+  return row ? mapSettings(row) : null;
 }
 
 // ── Stats ──────────────────────────────────────────────────────
-export function getUserStats(userId: string): { totalPosts: number; totalClaps: number; totalViews: number } {
-  const posts = readDb().posts.filter((p) => p.userId === userId);
+export async function getUserStats(
+  userId: string
+): Promise<{ totalPosts: number; totalClaps: number; totalViews: number }> {
+  const { data } = await db()
+    .from("posts")
+    .select("published, claps, views")
+    .eq("user_id", userId);
+
+  const posts = (data || []) as Record<string, unknown>[];
   return {
-    totalPosts: posts.filter((p) => p.published).length,
-    totalClaps: posts.reduce((sum, p) => sum + p.claps, 0),
-    totalViews: posts.reduce((sum, p) => sum + p.views, 0),
+    totalPosts: posts.filter((p) => Boolean(p.published)).length,
+    totalClaps: posts.reduce((s, p) => s + ((p.claps as number) || 0), 0),
+    totalViews: posts.reduce((s, p) => s + ((p.views as number) || 0), 0),
   };
 }
+
+// ── Available Themes List ──────────────────────────────────────
+export const BLOG_THEMES: { id: BlogTheme; name: string; description: string; preview: string }[] = [
+  { id: "minimal", name: "Minimal", description: "Clean Swiss design with generous whitespace", preview: "#fafaf9" },
+  { id: "dark-noir", name: "Dark Noir", description: "Dramatic dark background with bold typography", preview: "#0f0f0f" },
+  { id: "vintage-press", name: "Vintage Press", description: "Editorial newspaper aesthetic with serif elegance", preview: "#f5f0e8" },
+  { id: "neon-vapor", name: "Neon Vapor", description: "Cyberpunk-inspired with neon glows and gradients", preview: "#1a0a2e" },
+  { id: "forest", name: "Forest", description: "Earthy, natural tones with organic warmth", preview: "#1a2e1a" },
+  { id: "ocean-breeze", name: "Ocean Breeze", description: "Calm blue tones, professional and serene", preview: "#f0f7ff" },
+];

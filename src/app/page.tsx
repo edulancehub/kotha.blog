@@ -4,7 +4,7 @@ import { getFeedPosts } from "@/lib/db";
 import Link from "next/link";
 
 export default async function HubHomePage() {
-  const feedPosts = getFeedPosts(20);
+  const feedPosts = await getFeedPosts(20);
 
   return (
     <div className="min-h-full bg-white text-foreground">
