@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# local subdomain claims (JSON store; use DB or SUBDOMAIN_STORE_PATH in production)
+/data
+
 # debug
 npm-debug.log*
 yarn-debug.log*
