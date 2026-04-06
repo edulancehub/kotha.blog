@@ -20,11 +20,35 @@ export function hubBaseUrl(): string {
 }
 
 /**
+ * Hub origin for redirects (middleware) — preserves port on localhost.
+ */
+export function hubUrlFromRequestHost(hostHeader: string | null): string {
+  if (process.env.NEXT_PUBLIC_HUB_URL) {
+    return process.env.NEXT_PUBLIC_HUB_URL.replace(/\/$/, "");
+  }
+  const raw = hostHeader ?? "";
+  const hostname = raw.split(":")[0]?.toLowerCase() ?? "";
+  const candidatePort = raw.includes(":") ? raw.split(":").pop() ?? "3000" : "3000";
+  const port = /^\d{2,5}$/.test(candidatePort) ? candidatePort : "3000";
+
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.endsWith(".localhost")
+  ) {
+    return `http://localhost:${port}`;
+  }
+
+  return `https://${ROOT}`;
+}
+
+/**
  * Public URL for a tenant site, using the same port as the current request in local dev.
  */
 export function tenantSiteUrl(slug: string, requestHost: string | null): string {
   const host = requestHost?.split(":")[0]?.toLowerCase() ?? "";
-  const port = requestHost?.includes(":") ? requestHost.split(":")[1] : "";
+  const candidatePort = requestHost?.includes(":") ? requestHost.split(":")[1] : "";
+  const port = candidatePort && /^\d{2,5}$/.test(candidatePort) ? candidatePort : "";
 
   if (host === "localhost" || host.endsWith(".localhost")) {
     const p = port || "3000";
