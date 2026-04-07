@@ -17,6 +17,9 @@ import {
   getUserById,
   getUserReaction,
   setUserReaction,
+  isUserAdmin,
+  adminDeletePost,
+  adminDeleteUser,
   type BlogTheme,
   type ReactionKind,
 } from "@/lib/db";
@@ -259,4 +262,33 @@ export async function updateProfileAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+}
+
+// ── Admin Actions ──────────────────────────────────────────────
+export async function adminDeletePostAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/sign-in");
+  if (!(await isUserAdmin(user.id))) redirect("/");
+
+  const postId = formData.get("postId") as string;
+  if (postId) {
+    await adminDeletePost(postId);
+  }
+  revalidatePath("/admin");
+  revalidatePath("/admin/posts");
+  revalidatePath("/");
+}
+
+export async function adminDeleteUserAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/sign-in");
+  if (!(await isUserAdmin(user.id))) redirect("/");
+
+  const userId = formData.get("userId") as string;
+  if (userId && userId !== user.id) {
+    await adminDeleteUser(userId);
+  }
+  revalidatePath("/admin");
+  revalidatePath("/admin/users");
+  revalidatePath("/");
 }

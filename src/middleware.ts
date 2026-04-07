@@ -19,12 +19,16 @@ export async function middleware(request: NextRequest) {
   const slug = getTenantSlugFromHost(host);
 
   if (!slug) {
-    // Hub traffic — protect dashboard
-    if (pathname.startsWith("/dashboard")) {
+    // Hub traffic — protect dashboard and admin
+    if (pathname.startsWith("/dashboard") || pathname.startsWith("/admin")) {
       if (!user) {
         const url = request.nextUrl.clone();
         url.pathname = "/sign-in";
-        return NextResponse.redirect(url);
+        const redirectResponse = NextResponse.redirect(url);
+        supabaseResponse.cookies.getAll().forEach((cookie) => {
+          redirectResponse.cookies.set(cookie.name, cookie.value);
+        });
+        return redirectResponse;
       }
     }
     return supabaseResponse;

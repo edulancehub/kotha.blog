@@ -31,7 +31,12 @@ export type Post = {
   updatedAt: string;
 };
 
-export type BlogTheme = "minimal" | "dark-noir" | "vintage-press" | "neon-vapor" | "forest" | "ocean-breeze";
+export type BlogTheme =
+  | "minimal" | "dark-noir" | "vintage-press" | "neon-vapor" | "forest" | "ocean-breeze"
+  | "poets-quill" | "code-terminal" | "medical-journal" | "blueprint" | "gallery-canvas"
+  | "sunset-warmth" | "newsroom" | "zen-garden" | "startup-pitch" | "academic-paper"
+  | "fashion-editorial" | "music-studio" | "food-recipe" | "legal-brief" | "photography"
+  | "wellness" | "sports-arena" | "kids-education" | "corporate-pro";
 
 export type SiteSettings = {
   userId: string;
@@ -191,7 +196,7 @@ export async function createProfile(
 
   const { data, error } = await db()
     .from("profiles")
-    .insert({
+    .upsert({
       id: userId,
       username: slug,
       display_name: displayName,
@@ -203,7 +208,7 @@ export async function createProfile(
   if (error) return { error: error.message };
 
   // Create default site settings
-  await db().from("site_settings").insert({
+  await db().from("site_settings").upsert({
     user_id: userId,
     site_name: displayName + "'s Blog",
     tagline: "Welcome to my corner of the web",
@@ -622,11 +627,112 @@ export async function setUserReaction(
 }
 
 // ── Available Themes List ──────────────────────────────────────
-export const BLOG_THEMES: { id: BlogTheme; name: string; description: string; preview: string }[] = [
-  { id: "minimal", name: "Minimal", description: "Clean Swiss design with generous whitespace", preview: "#fafaf9" },
-  { id: "dark-noir", name: "Dark Noir", description: "Dramatic dark background with bold typography", preview: "#0f0f0f" },
-  { id: "vintage-press", name: "Vintage Press", description: "Editorial newspaper aesthetic with serif elegance", preview: "#f5f0e8" },
-  { id: "neon-vapor", name: "Neon Vapor", description: "Cyberpunk-inspired with neon glows and gradients", preview: "#1a0a2e" },
-  { id: "forest", name: "Forest", description: "Earthy, natural tones with organic warmth", preview: "#1a2e1a" },
-  { id: "ocean-breeze", name: "Ocean Breeze", description: "Calm blue tones, professional and serene", preview: "#f0f7ff" },
+export const BLOG_THEMES: { id: BlogTheme; name: string; description: string; preview: string; profession: string }[] = [
+  { id: "minimal", name: "Minimal", description: "Clean Swiss design with generous whitespace", preview: "#fafaf9", profession: "General" },
+  { id: "dark-noir", name: "Dark Noir", description: "Dramatic dark background with bold typography", preview: "#0f0f0f", profession: "Developers & Tech" },
+  { id: "vintage-press", name: "Vintage Press", description: "Editorial newspaper aesthetic with serif elegance", preview: "#f5f0e8", profession: "Journalists & Writers" },
+  { id: "neon-vapor", name: "Neon Vapor", description: "Cyberpunk neon glows and futuristic gradients", preview: "#1a0a2e", profession: "Gamers & Streamers" },
+  { id: "forest", name: "Forest", description: "Earthy natural tones with organic warmth", preview: "#f0f4ed", profession: "Nature & Environment" },
+  { id: "ocean-breeze", name: "Ocean Breeze", description: "Calm blue tones, professional and serene", preview: "#f0f7ff", profession: "Travel & Adventure" },
+  { id: "poets-quill", name: "Poet's Quill", description: "Elegant parchment tones with flowing serif typography", preview: "#fdf8f0", profession: "Poets & Lyricists" },
+  { id: "code-terminal", name: "Code Terminal", description: "Hacker-style terminal with monospace and green accents", preview: "#0c0c0c", profession: "Software Engineers" },
+  { id: "medical-journal", name: "Medical Journal", description: "Clean clinical design with trust-building blue tones", preview: "#f8fbff", profession: "Doctors & Healthcare" },
+  { id: "blueprint", name: "Blueprint", description: "Technical grid design with drafting-table aesthetics", preview: "#f0f4f8", profession: "Engineers & Architects" },
+  { id: "gallery-canvas", name: "Gallery Canvas", description: "Gallery-style layout with large media focus", preview: "#f5f5f5", profession: "Artists & Designers" },
+  { id: "sunset-warmth", name: "Sunset Warmth", description: "Warm golden tones with an inviting creator vibe", preview: "#fffbf5", profession: "Content Creators" },
+  { id: "newsroom", name: "Newsroom", description: "Bold newspaper layout with strong headlines", preview: "#fafafa", profession: "News & Media" },
+  { id: "zen-garden", name: "Zen Garden", description: "Minimalist Japanese-inspired tranquility", preview: "#f7f5f0", profession: "Mindfulness & Yoga" },
+  { id: "startup-pitch", name: "Startup Pitch", description: "Modern SaaS-style with gradient accents", preview: "#fafbff", profession: "Entrepreneurs & Startups" },
+  { id: "academic-paper", name: "Academic Paper", description: "Scholarly design for research and academic writing", preview: "#fafafa", profession: "Researchers & Professors" },
+  { id: "fashion-editorial", name: "Fashion Editorial", description: "High-contrast magazine with elegant typography", preview: "#ffffff", profession: "Fashion & Beauty" },
+  { id: "music-studio", name: "Music Studio", description: "Dark atmosphere with vibrant neon audio accents", preview: "#121212", profession: "Musicians & Producers" },
+  { id: "food-recipe", name: "Food & Recipe", description: "Warm inviting tones perfect for culinary content", preview: "#fef9f4", profession: "Food Bloggers & Chefs" },
+  { id: "legal-brief", name: "Legal Brief", description: "Professional structured design for legal content", preview: "#f8f8fa", profession: "Lawyers & Legal" },
+  { id: "photography", name: "Photography", description: "Dark background with image-first cinematic layout", preview: "#0f0f0f", profession: "Photographers" },
+  { id: "wellness", name: "Wellness", description: "Soft pastels with calming nurturing aesthetics", preview: "#faf5f0", profession: "Health & Wellness" },
+  { id: "sports-arena", name: "Sports Arena", description: "Bold energetic design with dynamic colors", preview: "#f4f4f4", profession: "Sports & Fitness" },
+  { id: "kids-education", name: "Kids & Education", description: "Colorful playful design for educational content", preview: "#fffdf7", profession: "Teachers & Educators" },
+  { id: "corporate-pro", name: "Corporate Pro", description: "Executive polished design for business leaders", preview: "#fafbfc", profession: "Business & Corporate" },
 ];
+
+// ── Admin Functions ────────────────────────────────────────────
+export async function isUserAdmin(userId: string): Promise<boolean> {
+  const { data } = await db()
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", userId)
+    .maybeSingle();
+  return data?.is_admin === true;
+}
+
+export async function getAllUsers(): Promise<(User & { postCount: number; isAdmin: boolean })[]> {
+  const { data: profiles } = await db()
+    .from("profiles")
+    .select("*")
+    .order("joined_at", { ascending: false });
+  if (!profiles) return [];
+
+  const users = (profiles as Record<string, unknown>[]).map(mapProfile);
+  const result: (User & { postCount: number; isAdmin: boolean })[] = [];
+
+  for (const u of users) {
+    const { count } = await db()
+      .from("posts")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", u.id);
+    const prof = profiles.find((p: Record<string, unknown>) => p.id === u.id);
+    result.push({ ...u, postCount: count || 0, isAdmin: (prof as Record<string, unknown>)?.is_admin === true });
+  }
+  return result;
+}
+
+export async function getAllPosts(): Promise<(Post & { author: User })[]> {
+  const { data: posts } = await db()
+    .from("posts")
+    .select("*, profiles!posts_user_id_fkey(*)")
+    .order("created_at", { ascending: false });
+
+  if (!posts) return [];
+  return (posts as Record<string, unknown>[])
+    .map((row) => {
+      const profile = (row as Record<string, unknown>).profiles as Record<string, unknown> | null;
+      if (!profile) return null;
+      return { ...mapPost(row), author: mapProfile(profile) };
+    })
+    .filter(Boolean) as (Post & { author: User })[];
+}
+
+export async function adminDeletePost(postId: string): Promise<boolean> {
+  const { error } = await db().from("posts").delete().eq("id", postId);
+  return !error;
+}
+
+export async function adminDeleteUser(userId: string): Promise<boolean> {
+  // This cascades: deletes posts, site_settings, comments, reactions
+  const { error } = await db().from("profiles").delete().eq("id", userId);
+  return !error;
+}
+
+export async function getAdminStats(): Promise<{
+  totalUsers: number;
+  totalPosts: number;
+  totalPublished: number;
+  totalComments: number;
+  totalViews: number;
+}> {
+  const { count: totalUsers } = await db().from("profiles").select("*", { count: "exact", head: true });
+  const { count: totalPosts } = await db().from("posts").select("*", { count: "exact", head: true });
+  const { count: totalPublished } = await db().from("posts").select("*", { count: "exact", head: true }).eq("published", true);
+  const { count: totalComments } = await db().from("post_comments").select("*", { count: "exact", head: true });
+  
+  const { data: viewsData } = await db().from("posts").select("views");
+  const totalViews = (viewsData || []).reduce((s: number, r: Record<string, unknown>) => s + ((r.views as number) || 0), 0);
+
+  return {
+    totalUsers: totalUsers || 0,
+    totalPosts: totalPosts || 0,
+    totalPublished: totalPublished || 0,
+    totalComments: totalComments || 0,
+    totalViews,
+  };
+}

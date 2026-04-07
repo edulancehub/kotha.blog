@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { getSiteSettings } from "@/lib/db";
+import { getSiteSettings, BLOG_THEMES } from "@/lib/db";
 import {
   updateSiteSettingsAction,
   updateProfileAction,
   updateAdSettingsAction,
 } from "@/lib/actions";
+import { ThemeSelector } from "./ThemeSelector";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
@@ -14,7 +15,7 @@ export default async function SettingsPage() {
   const settings = await getSiteSettings(user.id);
 
   return (
-    <div className="animate-fade-in space-y-6 max-w-2xl">
+    <div className="animate-fade-in space-y-6 max-w-3xl">
       <div>
         <h1 className="font-serif text-2xl font-bold text-foreground tracking-tight">Settings</h1>
         <p className="mt-1 text-sm text-muted-dark">
@@ -39,8 +40,29 @@ export default async function SettingsPage() {
         </form>
       </section>
 
-      {/* Appearance */}
+      {/* Theme Selector */}
       <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-200">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-muted mb-2">Blog Template</h2>
+        <p className="text-xs text-muted-dark mb-5">Choose a profession-specific template. Each template is designed for a specific type of content creator.</p>
+        
+        <ThemeSelector
+          themes={BLOG_THEMES}
+          currentTheme={settings?.theme || "minimal"}
+          userId={user.id}
+          currentSettings={{
+            siteName: settings?.siteName || "",
+            tagline: settings?.tagline || "",
+            accentColor: settings?.accentColor || "#0d9488",
+            bgColor: settings?.bgColor || "#fafaf9",
+            textColor: settings?.textColor || "#1c1917",
+            fontFamily: settings?.fontFamily || "serif",
+            headerStyle: settings?.headerStyle || "centered",
+          }}
+        />
+      </section>
+
+      {/* Appearance */}
+      <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-300">
         <h2 className="text-sm font-bold uppercase tracking-widest text-muted mb-4">Appearance</h2>
         <form action={updateSiteSettingsAction} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -53,6 +75,9 @@ export default async function SettingsPage() {
               <input name="tagline" type="text" defaultValue={settings?.tagline} className="input-field" placeholder="A short description..." />
             </div>
           </div>
+
+          {/* Hidden theme field — managed by ThemeSelector */}
+          <input type="hidden" name="theme" value={settings?.theme || "minimal"} />
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
@@ -114,7 +139,7 @@ export default async function SettingsPage() {
       </section>
 
       {/* Social Links */}
-      <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-300">
+      <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-400">
         <h2 className="text-sm font-bold uppercase tracking-widest text-muted mb-4">Social Links</h2>
         <form action={updateSiteSettingsAction} className="space-y-4">
           {/* Hidden defaults so other fields aren't cleared */}
@@ -145,15 +170,13 @@ export default async function SettingsPage() {
       </section>
 
       {/* Ads on your subdomain */}
-      <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-400">
+      <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-500">
         <h2 className="mb-1 text-sm font-bold uppercase tracking-widest text-muted">
           Ads on your blog
         </h2>
         <p className="mb-4 text-xs leading-relaxed text-muted-dark">
-          When enabled, your HTML snippets render on your public subdomain and post pages
-          (below the nav, after the article, and above the footer). Paste your ad network
-          embed code (e.g. Google AdSense). You are responsible for complying with the
-          network&apos;s policies; scripts run on your readers&apos; browsers.
+          When enabled, your HTML snippets render on your public subdomain and post pages.
+          Paste your ad network embed code (e.g. Google AdSense).
         </p>
         <form action={updateAdSettingsAction} className="space-y-4">
           <label className="flex cursor-pointer items-center gap-2.5 select-none">
@@ -170,7 +193,7 @@ export default async function SettingsPage() {
             <label className="input-label">Header slot (below navigation)</label>
             <textarea
               name="adSlotHeader"
-              rows={4}
+              rows={3}
               defaultValue={settings?.adSlotHeader}
               className="input-field resize-y font-mono text-xs"
               placeholder="<!-- e.g. AdSense unit -->"
@@ -180,7 +203,7 @@ export default async function SettingsPage() {
             <label className="input-label">In-article slot (after post body)</label>
             <textarea
               name="adSlotInArticle"
-              rows={4}
+              rows={3}
               defaultValue={settings?.adSlotInArticle}
               className="input-field resize-y font-mono text-xs"
               placeholder="Optional mid-content placement"
@@ -190,7 +213,7 @@ export default async function SettingsPage() {
             <label className="input-label">Footer slot (above site footer)</label>
             <textarea
               name="adSlotFooter"
-              rows={4}
+              rows={3}
               defaultValue={settings?.adSlotFooter}
               className="input-field resize-y font-mono text-xs"
               placeholder="<!-- bottom banner -->"
@@ -203,7 +226,7 @@ export default async function SettingsPage() {
       </section>
 
       {/* Preview */}
-      <section className="card-flat p-5 sm:p-6 animate-fade-in animate-delay-500">
+      <section className="card-flat p-5 sm:p-6">
         <h2 className="text-sm font-bold uppercase tracking-widest text-muted mb-3">Preview</h2>
         <Link href={`/p/${user.username}`} className="btn-secondary text-sm inline-flex">
           Open {user.username}.kotha.blog →

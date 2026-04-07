@@ -95,7 +95,7 @@ export async function signUp(
   if (!authData.user) return { error: "Sign up failed" };
 
   // Create profile
-  const { error: profileError } = await supabase.from("profiles").insert({
+  const { error: profileError } = await supabase.from("profiles").upsert({
     id: authData.user.id,
     username: username.toLowerCase(),
     display_name: displayName,
@@ -105,7 +105,7 @@ export async function signUp(
   if (profileError) return { error: profileError.message };
 
   // Create default site settings
-  await supabase.from("site_settings").insert({
+  await supabase.from("site_settings").upsert({
     user_id: authData.user.id,
     site_name: displayName + "'s Blog",
     tagline: "Welcome to my corner of the web",
