@@ -118,6 +118,12 @@ export function SignUpClient() {
             </div>
           )}
 
+          {state?.message && (
+            <div className="mt-4 animate-fade-in rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {state.message}
+            </div>
+          )}
+
           <form action={formAction} className="mt-7 space-y-4">
             <div>
               <label htmlFor="displayName" className="input-label">

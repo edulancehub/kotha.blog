@@ -25,6 +25,36 @@ import {
 } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
+function friendlyAuthInfraMessage(detail?: string): string {
+  const hint =
+    "Authentication service is unreachable. Check Supabase config: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.";
+  if (!detail) return hint;
+  const d = detail.toLowerCase();
+  if (d.includes("fetch failed") || d.includes("network")) return hint;
+  if (d.includes("invalid url")) return hint;
+  if (d.includes("could not be resolved") || d.includes("enotfound")) {
+    return "Supabase host cannot be resolved. NEXT_PUBLIC_SUPABASE_URL is wrong (DNS failed). Set your real project URL from Supabase dashboard.";
+  }
+  if (d.includes("host looks wrong")) return detail;
+  if (d.includes("missing supabase env vars")) return detail;
+  return detail;
+}
+
+function mapSignInError(message?: string): string {
+  const raw = message?.trim() || "";
+  const lower = raw.toLowerCase();
+
+  if (!raw) return "Unable to sign in right now. Please try again.";
+  if (lower.includes("email not confirmed") || lower.includes("email not verified")) {
+    return "Please confirm your email before signing in. Check your inbox and spam folder.";
+  }
+  if (lower.includes("invalid login credentials") || lower.includes("invalid email") || lower.includes("invalid password")) {
+    return "Invalid email or password";
+  }
+
+  return raw;
+}
+
 // ── Auth Actions ───────────────────────────────────────────────
 export async function signUpAction(_prev: unknown, formData: FormData) {
   const username = (formData.get("username") as string)?.trim().toLowerCase();
@@ -40,20 +70,35 @@ export async function signUpAction(_prev: unknown, formData: FormData) {
   }
 
   // Check username availability
-  const check = await isUsernameAvailable(username);
+  let check;
+  try {
+    check = await isUsernameAvailable(username);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return { error: friendlyAuthInfraMessage(msg) };
+  }
   if (!check.available) {
     return { error: check.reason };
   }
 
   // Create Supabase auth user
-  const supabase = await createClient();
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { username, display_name: displayName },
-    },
-  });
+  let authData;
+  let authError;
+  try {
+    const supabase = await createClient();
+    const result = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { username, display_name: displayName },
+      },
+    });
+    authData = result.data;
+    authError = result.error;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return { error: friendlyAuthInfraMessage(msg) };
+  }
 
   if (authError) {
     return { error: authError.message };
@@ -63,28 +108,44 @@ export async function signUpAction(_prev: unknown, formData: FormData) {
     return { error: "Failed to create account" };
   }
 
+  const requiresEmailConfirmation = !authData.session;
+
   // Create profile in our profiles table
   const result = await createProfile(authData.user.id, username, email, displayName);
   if (result.error) {
     return { error: result.error };
   }
 
+  if (requiresEmailConfirmation) {
+    return {
+      message:
+        "Account created. Please confirm your email before signing in.",
+    };
+  }
+
   redirect("/dashboard");
 }
 
 export async function signInAction(_prev: unknown, formData: FormData) {
-  const email = (formData.get("email") as string)?.trim();
+  const email = (formData.get("email") as string)?.trim().toLowerCase();
   const password = formData.get("password") as string;
 
   if (!email || !password) {
     return { error: "Email and password are required" };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  let error;
+  try {
+    const supabase = await createClient();
+    const result = await supabase.auth.signInWithPassword({ email, password });
+    error = result.error;
+  } catch (caught) {
+    const msg = caught instanceof Error ? caught.message : "Unknown error";
+    return { error: friendlyAuthInfraMessage(msg) };
+  }
 
   if (error) {
-    return { error: "Invalid email or password" };
+    return { error: mapSignInError(error.message) };
   }
 
   redirect("/dashboard");
@@ -98,7 +159,15 @@ export async function signOutAction() {
 
 // ── Check Username ─────────────────────────────────────────────
 export async function checkUsernameAction(username: string) {
-  return isUsernameAvailable(username);
+  try {
+    return await isUsernameAvailable(username);
+  } catch {
+    return {
+      available: false,
+      reason:
+        "Username check unavailable right now. Verify Supabase URL/keys in environment.",
+    };
+  }
 }
 
 // ── Post Actions ───────────────────────────────────────────────
