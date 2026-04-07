@@ -54,8 +54,8 @@ export default function SignInPage() {
 
           <form action={formAction} className="mt-7 space-y-4">
             <div>
-              <label htmlFor="email" className="input-label">Email</label>
-              <input id="email" name="email" type="email" required className="input-field" placeholder="you@example.com" />
+              <label htmlFor="email" className="input-label">Email or Username</label>
+              <input id="email" name="email" type="text" required className="input-field" placeholder="you@example.com or yourname" />
             </div>
 
             <div>

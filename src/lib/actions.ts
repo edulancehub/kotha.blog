@@ -15,6 +15,7 @@ import {
   addComment,
   getPostById,
   getUserById,
+  getUserByUsername,
   getUserReaction,
   setUserReaction,
   isUserAdmin,
@@ -63,7 +64,7 @@ function isEmailConfirmationError(message?: string): boolean {
 // ── Auth Actions ───────────────────────────────────────────────
 export async function signUpAction(_prev: unknown, formData: FormData) {
   const username = (formData.get("username") as string)?.trim().toLowerCase();
-  const email = (formData.get("email") as string)?.trim();
+  const email = (formData.get("email") as string)?.trim().toLowerCase();
   const password = formData.get("password") as string;
   const displayName = (formData.get("displayName") as string)?.trim();
 
@@ -132,11 +133,20 @@ export async function signUpAction(_prev: unknown, formData: FormData) {
 }
 
 export async function signInAction(_prev: unknown, formData: FormData) {
-  const email = (formData.get("email") as string)?.trim().toLowerCase();
+  const identifier = (formData.get("email") as string)?.trim().toLowerCase();
   const password = formData.get("password") as string;
 
-  if (!email || !password) {
-    return { error: "Email and password are required" };
+  if (!identifier || !password) {
+    return { error: "Email/username and password are required" };
+  }
+
+  let email = identifier;
+  if (!identifier.includes("@")) {
+    const user = await getUserByUsername(identifier);
+    if (!user?.email) {
+      return { error: "Invalid email/username or password" };
+    }
+    email = user.email.trim().toLowerCase();
   }
 
   let error;
