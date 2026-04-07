@@ -55,6 +55,11 @@ function mapSignInError(message?: string): string {
   return raw;
 }
 
+function isEmailConfirmationError(message?: string): boolean {
+  const lower = (message || "").toLowerCase();
+  return lower.includes("email not confirmed") || lower.includes("email not verified");
+}
+
 // ── Auth Actions ───────────────────────────────────────────────
 export async function signUpAction(_prev: unknown, formData: FormData) {
   const username = (formData.get("username") as string)?.trim().toLowerCase();
@@ -145,6 +150,23 @@ export async function signInAction(_prev: unknown, formData: FormData) {
   }
 
   if (error) {
+    if (isEmailConfirmationError(error.message)) {
+      try {
+        const supabase = await createClient();
+        await supabase.auth.resend({
+          type: "signup",
+          email,
+        });
+      } catch {
+        // Best-effort resend only.
+      }
+
+      return {
+        error:
+          "Please confirm your email before signing in. We sent a new verification link. Check inbox/spam.",
+      };
+    }
+
     return { error: mapSignInError(error.message) };
   }
 

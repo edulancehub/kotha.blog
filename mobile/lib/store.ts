@@ -54,8 +54,9 @@ export async function signIn(
   email: string,
   password: string
 ): Promise<{ user?: User; error?: string }> {
+  const normalizedEmail = email.trim().toLowerCase();
   const { data, error } = await supabase.auth.signInWithPassword({
-    email,
+    email: normalizedEmail,
     password,
   });
 
@@ -73,6 +74,7 @@ export async function signUp(
   password: string,
   displayName: string
 ): Promise<{ user?: User; error?: string }> {
+  const normalizedEmail = email.trim().toLowerCase();
   if (password.length < 6)
     return { error: "Password must be at least 6 characters" };
   if (username.length < 2)
@@ -84,7 +86,7 @@ export async function signUp(
 
   // Create Supabase auth user
   const { data: authData, error: authError } = await supabase.auth.signUp({
-    email,
+    email: normalizedEmail,
     password,
     options: {
       data: { username, display_name: displayName },
@@ -99,7 +101,7 @@ export async function signUp(
     id: authData.user.id,
     username: username.toLowerCase(),
     display_name: displayName,
-    email: email.toLowerCase(),
+    email: normalizedEmail,
   });
 
   if (profileError) return { error: profileError.message };
